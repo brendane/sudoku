@@ -7,7 +7,6 @@ def getrow(rc, board):
     r, c = rc
     return [board[(r, i)] for i in range(0, 9) if i != c]
 
-
 def getcol(rc, board):
     r, c = rc
     return [board[(i, c)] for i in range(0, 9) if i != r]
@@ -66,11 +65,11 @@ for infile in sys.argv[1:]:
                     _board[(i, j)] = int(col)
 
     board = {}
-    for k, v in _board.iteritems():
+    for rc, v in _board.iteritems():
         if v is None:
-            board[k] = set(range(1, 10))
+            board[rc] = set(range(1, 10))
         else:
-            board[k] = set([_board[k]])
+            board[rc] = set([_board[rc]])
 
     print '\nStart: %s' % infile
     printboard(board)
@@ -80,26 +79,26 @@ for infile in sys.argv[1:]:
     while(progress):
         iter += 1
         progress = False
-        for k, v in board.iteritems():
-            c = board[k]
+        for rc, v in board.iteritems():
+            c = board[rc]
             if len(c) == 1:
                 continue
             l = len(c)
             fixed = set()
             ufixed_row = set()
-            for cc in getrow(k, board):
+            for cc in getrow(rc, board):
                 if len(cc) == 1:
                     fixed.update(cc)
                 else:
                     ufixed_row.update(cc)
             ufixed_col = set()
-            for cc in getcol(k, board):
+            for cc in getcol(rc, board):
                 if len(cc) == 1:
                     fixed.update(cc)
                 else:
                     ufixed_col.update(cc)
             ufixed_sqr = set()
-            for cc in getsqr(k, board):
+            for cc in getsqr(rc, board):
                 if len(cc) == 1:
                     fixed.update(cc)
                 else:
@@ -108,7 +107,7 @@ for infile in sys.argv[1:]:
                 c -= fixed
                 printboard_full(board)
                 print iter
-                raise Exception('All numbers eliminated at %i, %i' % k)
+                raise Exception('All numbers eliminated at %i, %i' % rc)
             c -= fixed
             if len(c - ufixed_row) == 1:
                 c -= ufixed_row
@@ -124,7 +123,7 @@ for infile in sys.argv[1:]:
             for getfun in [getrow, getcol, getsqr]:
                 single_overlaps = Counter()
                 group_overlaps = defaultdict(int)
-                cells = getfun(k, board)
+                cells = getfun(rc, board)
                 for cc in cells:
                     if len(cc) == 1:
                         continue
@@ -204,6 +203,8 @@ for infile in sys.argv[1:]:
 
     if max(len(v) for v in board.itervalues()) > 1:
         printboard_full(board)
-
-    print
-    print '%i iterations to solve' % iter
+        print
+        print '%i iterations before giving up' % iter
+    else:
+        print
+        print '%i iterations to solve' % iter
