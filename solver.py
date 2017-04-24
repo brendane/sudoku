@@ -4,15 +4,18 @@ from collections import Counter, defaultdict
 from copy import deepcopy
 import sys
 
-def getrow(rc, board):
+def row_cells(rc, sudoku):
+    """Given coordinates rc, return all the other cells in the same row"""
     r, c = rc
-    return [board[(r, i)] for i in range(0, 9) if i != c]
+    return [sudoku[(r, i)] for i in range(0, 9) if i != c]
 
-def getcol(rc, board):
+def col_cells(rc, sudoku):
+    """Given coordinates rc, return all the other cells in the same column"""
     r, c = rc
-    return [board[(i, c)] for i in range(0, 9) if i != r]
+    return [sudoku[(i, c)] for i in range(0, 9) if i != r]
 
-def getsqr(rc, board):
+def sqr_cells(rc, sudoku):
+    """Given coordinates rc, return all the other cells in the same square"""
     r, c = rc
     sc = c / 3
     sr = r / 3
@@ -21,15 +24,15 @@ def getsqr(rc, board):
         for j in range(3):
             if (i+sr*3, j+sc*3) == rc:
                 continue
-            ret.append(board[(i+sr*3, j+sc*3)])
+            ret.append(sudoku[(i+sr*3, j+sc*3)])
     return ret
 
-def printboard(board):
+def printsudoku(sudoku):
     sys.stdout.write('\n||=====================================||\n')
     for i in range(9):
         sys.stdout.write('||')
         for j in range(9):
-            c = board[(i, j)]
+            c = sudoku[(i, j)]
             if len(c) > 1:
                 p = '?'
             else:
@@ -42,18 +45,19 @@ def printboard(board):
             sys.stdout.write('||=====================================||\n')
     sys.stdout.write('\n')
 
-def printboard_full(board):
+def printsudoku_full(sudoku):
     for i in range(9):
         for j in range(9):
             if j > 0:
                 sys.stdout.write('\t')
-            sys.stdout.write(','.join(str(x) for x in board[(i, j)]))
-            if len(board[(i, j)]) == 0:
+            sys.stdout.write(','.join(str(x) for x in sudoku[(i, j)]))
+            if len(sudoku[(i, j)]) == 0:
                 sys.stdout.write('??')
         sys.stdout.write('\n')
 
-def n_unsolved(board):
-    return sum(int(len(c) != 1) for c in board.itervalues())
+def n_unsolved(sudoku):
+    """Get the number of cells left unsolved"""
+    return sum(int(len(c) != 1) for c in sudoku.itervalues())
 
 def read_sudoku_file(fname):
     b = {}
@@ -69,39 +73,40 @@ def read_sudoku_file(fname):
     return b
 
 
-def logical_solver(board):
+def logical_solver(sudoku):
+    """ Solve the sudoku using logical methods"""
     iteration = 0
     progress = True
     while(progress):
         iteration += 1
         progress = False
-        for rc, v in board.iteritems():
-            c = board[rc]
+        for rc, v in sudoku.iteritems():
+            c = sudoku[rc]
             if len(c) == 1:
                 continue
             l = len(c)
             fixed = set()
             ufixed_row = set()
-            for cc in getrow(rc, board):
+            for cc in row_cells(rc, sudoku):
                 if len(cc) == 1:
                     fixed.update(cc)
                 else:
                     ufixed_row.update(cc)
             ufixed_col = set()
-            for cc in getcol(rc, board):
+            for cc in col_cells(rc, sudoku):
                 if len(cc) == 1:
                     fixed.update(cc)
                 else:
                     ufixed_col.update(cc)
             ufixed_sqr = set()
-            for cc in getsqr(rc, board):
+            for cc in sqr_cells(rc, sudoku):
                 if len(cc) == 1:
                     fixed.update(cc)
                 else:
                     ufixed_sqr.update(cc)
             if len(c - fixed) == 0:
                 #c -= fixed
-                #printboard_full(board)
+                #printsudoku_full(sudoku)
                 #print iteration
                 raise Exception('All numbers eliminated at %i, %i' % rc)
             # Subtract away the numbers that this cell cannot be b/c
@@ -120,10 +125,10 @@ def logical_solver(board):
             if len(c) == 1:
                 continue
 
-            for getfun in [getrow, getcol, getsqr]:
+            for getfun in [row_cells, col_cells, sqr_cells]:
                 single_overlaps = Counter()
                 group_overlaps = defaultdict(int)
-                cells = getfun(rc, board)
+                cells = getfun(rc, sudoku)
                 for cc in cells:
                     if len(cc) == 1:
                         continue
@@ -232,20 +237,20 @@ def logical_solver(board):
                     if len(c) == 1:
                         continue
 
-    return board, iteration, n_unsolved(board) == 0
+    return sudoku, iteration, n_unsolved(sudoku) == 0
 
 
 for infile in sys.argv[1:]:
-    start_board = read_sudoku_file(infile)
-    print '\nStart: %s (%i)' % (infile, n_unsolved(start_board))
-    printboard(start_board)
+    start_sudoku = read_sudoku_file(infile)
+    print '\nStart: %s (%i)' % (infile, n_unsolved(start_sudoku))
+    printsudoku(start_sudoku)
 
-    end_board, niters, solved = logical_solver(deepcopy(start_board))
-    print 'End: (%i)' % n_unsolved(end_board)
-    printboard(end_board)
+    end_sudoku, niters, solved = logical_solver(deepcopy(start_sudoku))
+    print 'End: (%i)' % n_unsolved(end_sudoku)
+    printsudoku(end_sudoku)
 
     if not solved:
-        printboard_full(end_board)
+        printsudoku_full(end_sudoku)
         ## Brute-force approach can go here
         print
         print '%i iterations before giving up' % niters
