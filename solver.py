@@ -2,6 +2,7 @@
 
 from collections import Counter, defaultdict
 from copy import deepcopy
+from itertools import combinations as combn
 import sys
 
 def row_cells(rc, sudoku):
@@ -72,6 +73,78 @@ def read_sudoku_file(fname):
                     b[(i, j)] = set([int(col)])
     return b
 
+def simple_elimination(cell, groups):
+    """Use simple elimination methods to solve a cell. Modifies
+    `cell'. """
+    fixed = set()
+    ufixed = []
+    for group in groups:
+        uf = set()
+        for cc in group:
+            if len(cc) == 1:
+                fixed.update(cc)
+            else:
+                uf.update(cc)
+        ufixed.append(uf)
+    if len(cell - fixed) == 0:
+        raise Exception('All numbers eliminated!')
+    # Eliminate the numbers that this cell cannot be b/c
+    # other cells are already set to those numbers
+    cell -= fixed
+    # Figure out if this is the only cell in a particular row,
+    # column, or square that can be a certain number
+    for uf in ufixed:
+        if len(cell - uf) == 1:
+            cell -= uf
+
+def eliminate_with_matching_tuples(cell, groups, max_size=5):
+    """Figure out if this cell is part of a pair (or triple, quadruple,
+    etc.) that are the only cells containing a certain set of 2 (or 3, 4, etc.)
+    items in the row, column, or square. If so, constrain the possibilities
+    for this cell to just that set of items.
+
+    Example: this cell is (1,3,4,7) and only one other cell in the row
+    contains 3 and 7. Then make this cell just (3,7)."""
+    for cells in groups:
+        single_overlaps = Counter()
+        group_overlaps = defaultdict(int)
+        for cc in cells:
+            if len(cc) == 1:
+                continue
+            single_overlaps.update(cell.intersection(cc))
+            group_overlaps[tuple(cell.intersection(cc))] += 1
+        for tuple_len in range(max_size, 1 , -1):
+            tupls = []
+            # Figure out if there is a pair (or triple, etc.) of
+            # numbers that only this cell and one (or two, etc.)
+            # other cell(s) in this row, column, or square can be.
+            for o, ocount in group_overlaps.iteritems():
+                if len(o) == tuple_len and ocount == tuple_len - 1:
+                    match = True
+                    for tuple_member in o:
+                        if single_overlaps[tuple_member] != tuple_len - 1:
+                            match = False
+                    if match:
+                        tupls.append(o)
+            if len(tupls) == 1:
+                cell.clear()
+                cell.update(tupls[0])
+
+def eliminate_with_other_tuples(cell, groups_with_cell):
+    """Figure out if there are two other cells in this row,
+    column or square that can each only be the same two
+    items (e.g. two cells that are both (1,5) ).
+    If so, remove those numbers from this cell's list.
+    Extended to groups larger than two."""
+    for cells in groups_with_cell:
+        for size in range(5, 1, -1):
+            for cell_comb in combn(filter(lambda x: len(x) == size, cells), size):
+                tupls = map(tuple, cell_comb)
+                match = reduce(lambda x, y: x == y, tupls)
+                if match:
+                    cell -= cell_comb[0]
+            if len(cell) == 1:
+                return
 
 def logical_solver(sudoku):
     """ Solve the sudoku using logical methods"""
@@ -80,162 +153,30 @@ def logical_solver(sudoku):
     while(progress):
         iteration += 1
         progress = False
-        for rc, v in sudoku.iteritems():
-            c = sudoku[rc]
+        for rc, c in sudoku.iteritems():
             if len(c) == 1:
                 continue
             l = len(c)
-            fixed = set()
-            ufixed_row = set()
-            for cc in row_cells(rc, sudoku):
-                if len(cc) == 1:
-                    fixed.update(cc)
-                else:
-                    ufixed_row.update(cc)
-            ufixed_col = set()
-            for cc in col_cells(rc, sudoku):
-                if len(cc) == 1:
-                    fixed.update(cc)
-                else:
-                    ufixed_col.update(cc)
-            ufixed_sqr = set()
-            for cc in sqr_cells(rc, sudoku):
-                if len(cc) == 1:
-                    fixed.update(cc)
-                else:
-                    ufixed_sqr.update(cc)
-            if len(c - fixed) == 0:
-                #c -= fixed
-                #printsudoku_full(sudoku)
-                #print iteration
-                raise Exception('All numbers eliminated at %i, %i' % rc)
-            # Subtract away the numbers that this cell cannot be b/c
-            # other cells are already set to those numbers
-            c -= fixed
-            # Figure out if this is the only cell in a particular row,
-            # column, or square that can be a certain number
-            if len(c - ufixed_row) == 1:
-                c -= ufixed_row
-            elif len(c - ufixed_col) == 1:
-                c -= ufixed_col
-            elif len(c - ufixed_sqr) == 1:
-                c -= ufixed_sqr
+            groups_with_cell = [row_cells(rc, sudoku), col_cells(rc, sudoku),
+                sqr_cells(rc, sudoku)]
+
+            simple_elimination(c, groups_with_cell)
             if len(c) < l:
                 progress = True
             if len(c) == 1:
                 continue
 
-            for getfun in [row_cells, col_cells, sqr_cells]:
-                single_overlaps = Counter()
-                group_overlaps = defaultdict(int)
-                cells = getfun(rc, sudoku)
-                for cc in cells:
-                    if len(cc) == 1:
-                        continue
-                    single_overlaps.update(c.intersection(cc))
-                    group_overlaps[tuple(c.intersection(cc))] += 1
-                pairs = []
-                triples = []
-                quads = []
-                quints = []
-                for o in group_overlaps:
-                    # Figure out if there is a pair (or triple, etc.) of
-                    # numbers that only this cell and one (or two, etc.)
-                    # other cell(s) in this row, column, or square can be.
-                    if len(o) == 2 and group_overlaps[o] == 1:
-                        if single_overlaps[o[0]] == 1 and single_overlaps[o[1]] == 1:
-                            pairs.append(o)
-                    if len(o) == 3 and group_overlaps[o] == 2:
-                        if single_overlaps[o[0]] == 2 and single_overlaps[o[1]] == 2 and \
-                            single_overlaps[o[2]] == 2:
-                            triples.append(o)
-                    if len(o) == 4 and group_overlaps[o] == 3:
-                        if single_overlaps[o[0]] == 3 and single_overlaps[o[1]] == 3 and \
-                            single_overlaps[o[2]] == 3 and single_overlaps[o[3]] == 3:
-                            quads.append(o)
-                    if len(o) == 5 and group_overlaps[o] == 4:
-                        if single_overlaps[o[0]] == 4 and single_overlaps[o[1]] == 4 and \
-                            single_overlaps[o[2]] == 4 and single_overlaps[o[3]] == 4 and \
-                            single_overlaps[o[4]] == 4:
-                            quints.append(o)
-                if len(quints) == 1:
-                    c.clear()
-                    c.update(quints[0])
-                if len(quads) == 1:
-                    c.clear()
-                    c.update(quads[0])
-                if len(triples) == 1:
-                    c.clear()
-                    c.update(triples[0])
-                if len(pairs) == 1:
-                    c.clear()
-                    c.update(pairs[0])
-                if len(c) < l:
-                    progress = True
-                if len(c) == 1:
-                    continue
-
-                # Figure out if there are two other cells in this row,
-                # column or square that can each only be the same two
-                # numbers (e.g. two cells that could both be a 1 or a 5).
-                # If so, remove those numbers from this cell's list.
-                for x in range(len(cells)):
-                    if len(cells[x]) != 2:
-                        continue
-                    tx = tuple(cells[x])
-                    for y in range(len(cells)):
-                        if x == y or len(cells[y]) != 2:
-                            continue
-                        if tx == tuple(cells[y]):
-                            c -= cells[x]
-                if len(c) < l:
-                    progress = True
-                if len(c) == 1:
-                    continue
-
-                for x in range(len(cells)):
-                    if len(cells[x]) != 3:
-                        continue
-                    tx = tuple(cells[x])
-                    for y in range(len(cells)):
-                        if x == y or len(cells[y]) != 3:
-                            continue
-                        if tx != tuple(cells[y]):
-                            continue
-                        for z in range(len(cells)):
-                            if x == z or y == z or len(cells[z]) != 3:
-                                continue
-                            if tx == tuple(cells[z]):
-                                c -= cells[x]
-                if len(c) < l:
-                    progress = True
-                if len(c) == 1:
-                    continue
-
-                for x in range(len(cells)):
-                    if len(cells[x]) != 4:
-                        continue
-                    tx = tuple(cells[x])
-                    for y in range(len(cells)):
-                        if x == y or len(cells[y]) != 4:
-                            continue
-                        if tx != tuple(cells[y]):
-                            continue
-                        for z in range(len(cells)):
-                            if x == z or y == z or len(cells[z]) != 4:
-                                continue
-                            if tuple(cells[z]) != tx:
-                                continue
-                            for w in range(len(cells)):
-                                if x == w or y == w or z == w or \
-                                        len(cells[w]) != 4:
-                                    continue
-                                if tuple(cells[w]) == tx:
-                                    c -= cells[x]
-                    if len(c) < l:
-                        progress = True
-                    if len(c) == 1:
-                        continue
+            eliminate_with_matching_tuples(c, groups_with_cell)
+            if len(c) < l:
+                progress = True
+            if len(c) == 1:
+                continue
+                
+            eliminate_with_other_tuples(c, groups_with_cell)
+            if len(c) < l:
+                progress = True
+            if len(c) == 1:
+                continue
 
     return sudoku, iteration, n_unsolved(sudoku) == 0
 
