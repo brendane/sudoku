@@ -1,6 +1,7 @@
 #!/usr/bin/env python2.7
 
 from collections import Counter, defaultdict
+from copy import deepcopy
 import sys
 
 def getrow(rc, board):
@@ -51,33 +52,28 @@ def printboard_full(board):
                 sys.stdout.write('??')
         sys.stdout.write('\n')
 
-_board = {}
+def n_unsolved(board):
+    return sum(int(len(c) != 1) for c in board.itervalues())
 
-for infile in sys.argv[1:]:
+def read_sudoku_file(fname):
+    b = {}
     with open(infile, 'rb') as ihandle:
         for i, line in enumerate(ihandle):
             row = line.split('\t')
             for j, col in enumerate(row):
                 col = col.strip()
                 if col == '':
-                    _board[(i, j)] = None
+                    b[(i, j)] = set(range(1, 10))
                 else:
-                    _board[(i, j)] = int(col)
+                    b[(i, j)] = set([int(col)])
+    return b
 
-    board = {}
-    for rc, v in _board.iteritems():
-        if v is None:
-            board[rc] = set(range(1, 10))
-        else:
-            board[rc] = set([_board[rc]])
 
-    print '\nStart: %s' % infile
-    printboard(board)
-
-    iter = 0
+def logical_solver(board):
+    iteration = 0
     progress = True
     while(progress):
-        iter += 1
+        iteration += 1
         progress = False
         for rc, v in board.iteritems():
             c = board[rc]
@@ -104,11 +100,15 @@ for infile in sys.argv[1:]:
                 else:
                     ufixed_sqr.update(cc)
             if len(c - fixed) == 0:
-                c -= fixed
-                printboard_full(board)
-                print iter
+                #c -= fixed
+                #printboard_full(board)
+                #print iteration
                 raise Exception('All numbers eliminated at %i, %i' % rc)
+            # Subtract away the numbers that this cell cannot be b/c
+            # other cells are already set to those numbers
             c -= fixed
+            # Figure out if this is the only cell in a particular row,
+            # column, or square that can be a certain number
             if len(c - ufixed_row) == 1:
                 c -= ufixed_row
             elif len(c - ufixed_col) == 1:
@@ -134,6 +134,9 @@ for infile in sys.argv[1:]:
                 quads = []
                 quints = []
                 for o in group_overlaps:
+                    # Figure out if there is a pair (or triple, etc.) of
+                    # numbers that only this cell and one (or two, etc.)
+                    # other cell(s) in this row, column, or square can be.
                     if len(o) == 2 and group_overlaps[o] == 1:
                         if single_overlaps[o[0]] == 1 and single_overlaps[o[1]] == 1:
                             pairs.append(o)
@@ -167,12 +170,37 @@ for infile in sys.argv[1:]:
                 if len(c) == 1:
                     continue
 
+                # Figure out if there are two other cells in this row,
+                # column or square that can each only be the same two
+                # numbers (e.g. two cells that could both be a 1 or a 5).
+                # If so, remove those numbers from this cell's list.
                 for x in range(len(cells)):
+                    if len(cells[x]) != 2:
+                        continue
+                    tx = tuple(cells[x])
                     for y in range(len(cells)):
-                        if x == y:
+                        if x == y or len(cells[y]) != 2:
                             continue
-                        if len(cells[x]) == 2 and len(cells[y]) == 2:
-                            if tuple(cells[x]) == tuple(cells[y]):
+                        if tx == tuple(cells[y]):
+                            c -= cells[x]
+                if len(c) < l:
+                    progress = True
+                if len(c) == 1:
+                    continue
+
+                for x in range(len(cells)):
+                    if len(cells[x]) != 3:
+                        continue
+                    tx = tuple(cells[x])
+                    for y in range(len(cells)):
+                        if x == y or len(cells[y]) != 3:
+                            continue
+                        if tx != tuple(cells[y]):
+                            continue
+                        for z in range(len(cells)):
+                            if x == z or y == z or len(cells[z]) != 3:
+                                continue
+                            if tx == tuple(cells[z]):
                                 c -= cells[x]
                 if len(c) < l:
                     progress = True
@@ -180,31 +208,47 @@ for infile in sys.argv[1:]:
                     continue
 
                 for x in range(len(cells)):
+                    if len(cells[x]) != 4:
+                        continue
+                    tx = tuple(cells[x])
                     for y in range(len(cells)):
-                        if x == y:
+                        if x == y or len(cells[y]) != 4:
+                            continue
+                        if tx != tuple(cells[y]):
                             continue
                         for z in range(len(cells)):
-                            if x == z or y == z:
+                            if x == z or y == z or len(cells[z]) != 4:
                                 continue
-                            if len(cells[x]) == 3 and len(cells[y]) == 3 and \
-                                    len(cells[z]) == 3:
-                                if tuple(cells[x]) == tuple(cells[y]) and \
-                                        tuple(cells[x]) == tuple(cells[z]):
+                            if tuple(cells[z]) != tx:
+                                continue
+                            for w in range(len(cells)):
+                                if x == w or y == w or z == w or \
+                                        len(cells[w]) != 4:
+                                    continue
+                                if tuple(cells[w]) == tx:
                                     c -= cells[x]
-                if len(c) < l:
-                    progress = True
-                if len(c) == 1:
-                    continue
+                    if len(c) < l:
+                        progress = True
+                    if len(c) == 1:
+                        continue
 
-                ## Could add four cell combinations here, if needed
+    return board, iteration, n_unsolved(board) == 0
 
-    print 'End:'
-    printboard(board)
 
-    if max(len(v) for v in board.itervalues()) > 1:
-        printboard_full(board)
+for infile in sys.argv[1:]:
+    start_board = read_sudoku_file(infile)
+    print '\nStart: %s (%i)' % (infile, n_unsolved(start_board))
+    printboard(start_board)
+
+    end_board, niters, solved = logical_solver(deepcopy(start_board))
+    print 'End: (%i)' % n_unsolved(end_board)
+    printboard(end_board)
+
+    if not solved:
+        printboard_full(end_board)
+        ## Brute-force approach can go here
         print
-        print '%i iterations before giving up' % iter
+        print '%i iterations before giving up' % niters
     else:
         print
-        print '%i iterations to solve' % iter
+        print '%i iterations to solve' % niters
