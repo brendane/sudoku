@@ -177,7 +177,7 @@ def logical_solver(sudoku):
 
     return sudoku, iteration, n_unsolved(sudoku) == 0
 
-def guess_solver(sudoku, chosen=None):
+def guess_solver(sudoku, prev_chosen=[]):
     """Take a guess at one undetermined cell, then try to solve"""
     cell_to_guess = None
     for n_choices in range(2, 10):
@@ -185,11 +185,11 @@ def guess_solver(sudoku, chosen=None):
             break
         for rc, cell in sudoku.iteritems():
             if len(cell) == n_choices:
-                if chosen is not None and chosen == rc:
+                if rc in prev_chosen:
                     continue
                 cell_to_guess = rc
                 break
-    choices = list(sudoku[rc])
+    choices = list(sudoku[cell_to_guess])
     for choice in choices:
         sudoku_copy = deepcopy(sudoku)
         sudoku_copy[cell_to_guess] = set([choice])
@@ -197,13 +197,18 @@ def guess_solver(sudoku, chosen=None):
         try:
             sudoku_copy, niter, solved = logical_solver(sudoku_copy)
         except:
-            # Failed with this guess, try next choice
-            solved = False
-            continue
+            continue # Failed with this guess, try next choice
+        # Probably not the most elegant way to code this, but it has
+        # to be able to detect when no solution is found.
         if solved:
-            return sudoku_copy
+            return True, sudoku_copy
         else:
-            return guess_solver(sudoku_copy, cell_to_guess)
+            solved, sudoku_copy = guess_solver(sudoku_copy, prev_chosen + [cell_to_guess])
+        if solved:
+            return True, sudoku_copy
+        else:
+            continue
+    return False, sudoku_copy # if guessing fails - probably not all choices tried or logic wrong
 
 
 for infile in sys.argv[1:]:
@@ -217,10 +222,9 @@ for infile in sys.argv[1:]:
     except:
         solved = False
         end_sudoku = start_sudoku
-        pass
 
     if not solved:
-        end_sudoku = guess_solver(end_sudoku)
+        end_sudoku = guess_solver(end_sudoku)[1]
         print 'End: (%i)' % n_unsolved(end_sudoku)
         printsudoku(end_sudoku)
     else:
