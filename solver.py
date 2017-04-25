@@ -115,9 +115,6 @@ def eliminate_with_matching_tuples(cell, groups, max_size=5):
             group_overlaps[tuple(cell.intersection(cc))] += 1
         for tuple_len in range(max_size, 1 , -1):
             tupls = []
-            # Figure out if there is a pair (or triple, etc.) of
-            # numbers that only this cell and one (or two, etc.)
-            # other cell(s) in this row, column, or square can be.
             for o, ocount in group_overlaps.iteritems():
                 if len(o) == tuple_len and ocount == tuple_len - 1:
                     match = True
@@ -130,14 +127,14 @@ def eliminate_with_matching_tuples(cell, groups, max_size=5):
                 cell.clear()
                 cell.update(tupls[0])
 
-def eliminate_with_other_tuples(cell, groups_with_cell):
+def eliminate_with_other_tuples(cell, groups_with_cell, max_size=5):
     """Figure out if there are two other cells in this row,
     column or square that can each only be the same two
     items (e.g. two cells that are both (1,5) ).
     If so, remove those numbers from this cell's list.
     Extended to groups larger than two."""
     for cells in groups_with_cell:
-        for size in range(5, 1, -1):
+        for size in range(max_size, 1, -1):
             for cell_comb in combn(filter(lambda x: len(x) == size, cells), size):
                 tupls = map(tuple, cell_comb)
                 match = reduce(lambda x, y: x == y, tupls)
@@ -147,7 +144,7 @@ def eliminate_with_other_tuples(cell, groups_with_cell):
                 return
 
 def logical_solver(sudoku):
-    """ Solve the sudoku using logical methods"""
+    """Solve the sudoku using logical methods"""
     iteration = 0
     progress = True
     while(progress):
@@ -180,21 +177,52 @@ def logical_solver(sudoku):
 
     return sudoku, iteration, n_unsolved(sudoku) == 0
 
+def guess_solver(sudoku, chosen=None):
+    """Take a guess at one undetermined cell, then try to solve"""
+    cell_to_guess = None
+    for n_choices in range(2, 10):
+        if cell_to_guess is not None:
+            break
+        for rc, cell in sudoku.iteritems():
+            if len(cell) == n_choices:
+                if chosen is not None and chosen == rc:
+                    continue
+                cell_to_guess = rc
+                break
+    choices = list(sudoku[rc])
+    for choice in choices:
+        sudoku_copy = deepcopy(sudoku)
+        sudoku_copy[cell_to_guess] = set([choice])
+        solved = False
+        try:
+            sudoku_copy, niter, solved = logical_solver(sudoku_copy)
+        except:
+            # Failed with this guess, try next choice
+            solved = False
+            continue
+        if solved:
+            return sudoku_copy
+        else:
+            return guess_solver(sudoku_copy, cell_to_guess)
+
 
 for infile in sys.argv[1:]:
     start_sudoku = read_sudoku_file(infile)
     print '\nStart: %s (%i)' % (infile, n_unsolved(start_sudoku))
     printsudoku(start_sudoku)
 
-    end_sudoku, niters, solved = logical_solver(deepcopy(start_sudoku))
-    print 'End: (%i)' % n_unsolved(end_sudoku)
-    printsudoku(end_sudoku)
+    solved = False
+    try:
+        end_sudoku, niters, solved = logical_solver(deepcopy(start_sudoku))
+    except:
+        solved = False
+        end_sudoku = start_sudoku
+        pass
 
     if not solved:
-        printsudoku_full(end_sudoku)
-        ## Brute-force approach can go here
-        print
-        print '%i iterations before giving up' % niters
+        end_sudoku = guess_solver(end_sudoku)
+        print 'End: (%i)' % n_unsolved(end_sudoku)
+        printsudoku(end_sudoku)
     else:
-        print
-        print '%i iterations to solve' % niters
+        print 'End: (%i)' % n_unsolved(end_sudoku)
+        printsudoku(end_sudoku)
