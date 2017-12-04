@@ -163,6 +163,10 @@ def logical_solver(sudoku):
             if len(c) == 1:
                 continue
 
+            """
+            Actually faster without these methods
+            """
+            """
             eliminate_with_matching_tuples(c, groups_with_cell)
             if len(c) < l:
                 progress = True
@@ -174,6 +178,7 @@ def logical_solver(sudoku):
                 progress = True
             if len(c) == 1:
                 continue
+            """
 
     return sudoku, iteration, n_unsolved(sudoku) == 0
 
@@ -208,7 +213,7 @@ def guess_solver(sudoku, prev_chosen=[]):
             return True, sudoku_copy
         else:
             continue
-    return False, sudoku_copy # if guessing fails - probably not all choices tried or logic wrong
+    return False, sudoku_copy # if none of the choices work
 
 
 for infile in sys.argv[1:]:
