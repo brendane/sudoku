@@ -1,11 +1,15 @@
 #!/usr/bin/env racket
 #lang racket
 
-;; Sudoku solver in racket. Might make sense to use a plain list
-;; instead of a hash-table.
+;; Sudoku solver in racket. Might make sense to use a plain vector
+;; instead of a hash-table (lists are immutable).
 ;;
 ;; Also, there may be further opportunities to eliminate unnecessary
 ;; computations.
+;;
+;; Note that the sets used here are immutable. The hash-copy function seems
+;; to make a shallow copy, but that doesn't matter if the sets inside of
+;; it are immutable.
 
 (define *initial-cell* (list 1 2 3 4 5 6 7 8 9))
 
@@ -158,25 +162,18 @@
                 b
                 (guess-solve b (set-add prev rc))))))))
 
-(define (foo n)
-  (if (> n 10)
-      n
-      (for/last ([i (in-range 3)])
-        (if (> (+ n i) 20)
-            12
-            ((+ 2 2)
-             (foo (+ n 1)))))))
-
 
 ;; Loop over files, solve, and print
-(define infiles (current-command-line-arguments))
-(for ([fname infiles])
-  (let ([board (call-with-input-file fname
-                   (lambda (input) (read-board input)))])
-    (printf "\nSTART ~s\n" fname)
-    (print-board board)
-    (do-elim-solve! board 100)
-    (define final (guess-solve board))
-    (printf "\nEND ~s\n" fname)
-    (printf "Solved?: ~a\n" (solved-board? final))
-    (print-board final)))
+(define (main infiles)
+  (for ([fname infiles])
+       (let ([board (call-with-input-file fname
+                                          (lambda (input) (read-board input)))])
+         (printf "\nSTART ~s\n" fname)
+         (print-board board)
+         (do-elim-solve! board 100)
+         (define final (guess-solve board))
+         (printf "\nEND ~s\n" fname)
+         (printf "Solved?: ~a\n" (solved-board? final))
+         (print-board final))))
+
+(main (current-command-line-arguments))
