@@ -31,7 +31,7 @@ function n_unsolved(b)
 end
 
 function read_board(fname)
-    board = Array{Set{Int},2}(9, 9)
+    board = Array{Set{Int},2}(undef, 9, 9)
     open(fname, "r") do handle
         for (i, line) in enumerate(eachline(handle))
             for (j, cell) in enumerate(split(line, "\t"))
@@ -121,9 +121,8 @@ function simple_solver!(b)
         if n_u_ == n_u
             # No progress
             break
-        else
-            n_u = n_u_
         end
+        n_u = n_u_
     end
 end
 
@@ -163,11 +162,15 @@ function solve(b, guess_cells=[])
     return b_cpy
 end
 
-for fname in ARGS
-    board = read_board(fname)
-    print("\n", "Start: ", fname, " (", n_unsolved(board), ")\n\n")
-    print_board(board)
-    solution = solve(board)
-    print("\n", "End: ", fname, " (", n_unsolved(solution), ")\n\n")
-    print_board(solution)
+function main()
+    for fname in ARGS
+        board = read_board(fname)
+        print("\n", "Start: ", fname, " (", n_unsolved(board), ")\n\n")
+        print_board(board)
+        solution = solve(board)
+        print("\n", "End: ", fname, " (", n_unsolved(solution), ")\n\n")
+        print_board(solution)
+    end
 end
+
+main()
