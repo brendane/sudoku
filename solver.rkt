@@ -1,31 +1,25 @@
 #!/usr/bin/env racket
 #lang racket
 
-;; Sudoku solver in racket. Might make sense to use a plain vector
-;; instead of a hash-table (lists are immutable).
+;; Sudoku solver in racket. Currently working on most of the examples.
 ;;
-;; Also, there may be further opportunities to eliminate unnecessary
-;; computations.
-;;
-;; Note that the sets used here are immutable. The hash-copy function seems
-;; to make a shallow copy, but that doesn't matter if the sets inside of
-;; it are immutable.
+;; Note that the sets used here are immutable,:which is good, because
+;; racket does not seem to have a deep copy function.
 
-(define *initial-cell* (list 1 2 3 4 5 6 7 8 9))
+(define *initial-cell* (set 1 2 3 4 5 6 7 8 9))
 
 
 ;; integer division
 (define (idiv x y) (floor (/ x y)))
 
 (define (read-board input-port)
-  (let ([board (make-hash)])
+  (let ([board (make-vector 81 *initial-cell*)])
     (for ([(line r) (in-indexed (in-lines input-port))])
       (let ([cells (string-split line "\t" #:trim? #f)])
         (for ([(cell c) (in-indexed cells)])
-          (hash-set! board (list r c)
-                     (if (equal? cell "")
-                         (list->set *initial-cell*)
-                         (set (string->number cell)))))))
+             (if (equal? cell "")
+               (void)
+               (vector-set! board (+ (* r 9) c) (set (string->number cell)))))))
     board))
 
 
@@ -35,7 +29,7 @@
                  "||=====================================||\n" ""))
     (for ([c (in-range 9)])
       (display (if (= 0 (remainder c 3)) "|" ""))
-      (let ([cell (hash-ref board (list r c))])
+      (let ([cell (vector-ref board (+ c (* 9 r)))])
         (if (= (set-count cell) 1)
             (printf "| ~s " (set-first cell))
             (display "| ? "))))
@@ -46,44 +40,42 @@
 (define (fixed? cell) (= 1 (set-count cell)))
 
 
-(define (fixed-or-error? cell) (>= 1 (set-count cell)))
+(define (error? cell) (= 0 (set-count cell)))
+
 
 
 (define (filter-fixed cells) (filter fixed? cells))
 
 
-(define (solved-board? board)
-  (andmap fixed? (hash-values board)))
+(define (solved-board? board) (andmap fixed? (vector->list board)))
 
 
 (define (n-solved-board board)
-  (foldl + 0 (map (lambda (x) (if (fixed? x) 1 0)) (hash-values board))))
+  (foldl + 0 (map (lambda (x) (if (fixed? x) 1 0)) (vector->list board))))
 
 
 (define (row board r c)
-  (for/list ([(k v) (in-hash board)]
-             #:when (and (= r (first k))
-                         (not (= c (second k)))))
-    v))
+  (let ([i (* 9 r)])
+    (for/list ([ci (in-range 9)]
+               #:when (not (= ci c)))
+              (vector-ref board (+ ci i)))))
 
 
 (define (col board r c)
-  (for/list ([(k v) (in-hash board)]
-             #:when (and (= c (second k))
-                         (not (= r (first k)))))
-    v))
+  (for/list ([ri (in-range 9)]
+             #:when (not (= ri r)))
+            (vector-ref board (+ c (* 9 ri)))))
 
 
+;; Change to vector
 (define (sq board r c)
-  (let ([sr (idiv r 3)]
-        [sc (idiv c 3)])
-    (for/list ([(k v) (in-hash board)]
-               #:when (and (= sr (idiv (first k) 3))
-                           (= sc (idiv (second k) 3))
-                           (or
-                            (not (= r (first k)))
-                            (not (= c (second k))))))
-      v)))
+  (let ([sr (* 3 (idiv r 3))]
+        [sc (* 3 (idiv c 3))])
+    (for*/list ([i (in-range 3)]
+                [j (in-range 3)]
+                #:when (or (not (= r (+ sr i)))
+                           (not (= c (+ sc j)))))
+               (vector-ref board (+ sc j (* 9 (+ sr i)))))))
 
 
 ;; For a list of sets (or list of list of sets, etc), take
@@ -111,24 +103,23 @@
 ;; 2) Figure out if the target cell has a value that is unique in the
 ;;    row, column, or square. 
 (define (eliminate board r c)
-  (let* ([start (hash-ref board (list r c))]
+  (let* ([start (vector-ref board (+ c (* 9 r)))]
          [others (list (row board r c) (col board r c) (sq board r c))]
          [cant-be (flatten-set-union
-                   (map filter-fixed others))]
+                    (map filter-fixed others))]
          [can-be (set-subtract start cant-be)])
-    (if (fixed-or-error? can-be)
+    (if (error? can-be)
+      (error "no solution")
+      (if (fixed? can-be)
         can-be
-        (get-uniq can-be others))))
+        (get-uniq can-be others)))))
 
 
 (define (elim-solve! board)
   (for ([r (in-range 9)])
     (for ([c (in-range 9)]
-          #:unless (fixed? (hash-ref board (list r c))))
-      (let ([newc (eliminate board r c)])
-        (if (= 0 (set-count newc))
-            (void)
-            (hash-set! board (list r c) newc))))))
+          #:unless (fixed? (vector-ref board (+ c (* 9 r)))))
+         (vector-set! board (+ c (* 9 r)) (eliminate board r c)))))
 
 
 (define (do-elim-solve! board [limit 1000] [n 1] [prev-n-solved 0])
@@ -140,27 +131,44 @@
 
 
 (define (pick-cell-to-guess board prev)
-  (for*/last ([n (in-range 2 9)]
+  (for*/last ([n (in-range 2 10)]
               [r (in-range 9)]
               [c (in-range 9)]
               #:final (and (not (set-member? prev (list r c)))
-                           (= n (set-count (hash-ref board (list r c))))
-                           (not (fixed? (hash-ref board (list r c))))))
-    (list r c)))
+                           (= n (set-count (vector-ref board (+ c (* 9 r)))))
+                           (not (fixed? (vector-ref board (+ c (* 9 r)))))))
+    (+ c (* 9 r))))
+
+;; This is a convoluted approach to dealing with errors, but
+;; it's the only thing I could come up with.
+;; I'm sure if I understood continuations, this would be a place to
+;; use them
+(define (inner-guess board rc choices prev)
+  (let ([choice (set (set-first choices))]
+        [b (vector-copy board)])
+    (vector-set! b rc choice)
+    (let ([bb (with-handlers*
+                ([exn:fail? (lambda (e) (inner-guess board
+                                                     rc
+                                                     (set-subtract choices choice)
+                                                     prev))])
+                (do-elim-solve! b))])
+      (if (solved-board? bb)
+        bb
+        (with-handlers* ([exn:fail? (lambda (e) (inner-guess board
+                                                             rc
+                                                             (set-subtract choices choice)
+                                                             prev))])
+                        (guess-solve bb (set-add prev rc)))))))
 
 
 (define (guess-solve board [prev (set)])
   (if (solved-board? board)
-      board
-      (let* ([rc (pick-cell-to-guess board prev)]
-             [cell (hash-ref board rc)])
-        (for/last ([i (in-set cell)])
-          (let ([b (hash-copy board)])
-            (hash-set! b rc (set i))
-            (do-elim-solve! b)
-            (if (solved-board? b)
-                b
-                (guess-solve b (set-add prev rc))))))))
+    board
+    (let* ([rc (pick-cell-to-guess board prev)]
+           [cell (vector-ref board rc)]
+           [b (vector-copy board)])
+      (inner-guess b rc cell (set-add prev rc)))))
 
 
 ;; Loop over files, solve, and print
