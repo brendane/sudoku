@@ -1,7 +1,7 @@
 #!/usr/bin/env racket
 #lang racket
 
-;; Sudoku solver in racket. Currently working on most of the examples.
+;; Sudoku solver in racket.
 ;;
 ;; Note that the sets used here are immutable,:which is good, because
 ;; racket does not seem to have a deep copy function.
@@ -41,7 +41,6 @@
 
 
 (define (error? cell) (= 0 (set-count cell)))
-
 
 
 (define (filter-fixed cells) (filter fixed? cells))
@@ -139,22 +138,28 @@
                            (not (fixed? (vector-ref board (+ c (* 9 r)))))))
     (+ c (* 9 r))))
 
-;; This is a convoluted approach to dealing with errors, but
-;; it's the only thing I could come up with.
-;; I'm sure if I understood continuations, this would be a place to
-;; use them
+;; This is a convoluted approach to dealing with errors, but it's the only
+;; thing I could come up with.  I'm sure if I understood continuations, this
+;; would be a place to use them
 (define (inner-guess board rc choices prev)
   (let ([choice (set (set-first choices))]
         [b (vector-copy board)])
     (vector-set! b rc choice)
-    (let ([bb (with-handlers*
+    (let 
+      ;; First, take a guess, and see if it is wrong. If it is wrong,
+      ;; there will be an error, and we try a different value.
+      ([bb (with-handlers*
                 ([exn:fail? (lambda (e) (inner-guess board
                                                      rc
                                                      (set-subtract choices choice)
                                                      prev))])
                 (do-elim-solve! b))])
       (if (solved-board? bb)
+        ;; The board was solved by the above guess, return it.
         bb
+        ;; Not solved by guessing at this cell, but also not known to be
+        ;; wrong. Try a guess at another cell using guess-solve. Then, if
+        ;; that raises an error, change the guess at this cell and try again.
         (with-handlers* ([exn:fail? (lambda (e) (inner-guess board
                                                              rc
                                                              (set-subtract choices choice)
@@ -162,6 +167,7 @@
                         (guess-solve bb (set-add prev rc)))))))
 
 
+;; Pick a cell to guess at, then run inner-guess
 (define (guess-solve board [prev (set)])
   (if (solved-board? board)
     board
