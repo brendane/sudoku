@@ -3,14 +3,22 @@ import os, parsecsv, sets, strutils
 type
   Cell = HashSet[int]
   Board = seq[Cell]
-  CellState = enum
+  BoardState = enum
     Solved
-    Improved
     Unsolved
-    Wrong
+    Failed
+
 
 proc emptyCell(): Cell =
   return toSet([1, 2, 3, 4, 5, 6, 7, 8, 9])
+
+
+proc nSolved(b:Board): int =
+  result = 0
+  for c in b:
+    if len(c) == 1:
+      result += 1
+
 
 proc readBoard(fname:string): Board =
   result = @[]
@@ -61,14 +69,20 @@ proc simpleElim(b:var Board; i:int): Cell =
   for n in getNeighbors(b, i):
     if len(n) == 1:
       c = c - n
+    if len(c) == 1:
+      break
   return c
 
+
 ## Run simpleElim on all cells, repeating until there is no more
-## improvement
-proc simpleSolve(b:var Board): bool =
+## improvement; modifies b.
+##
+## Might be better not to throw an exception, but to
+## return a indicator of final board state.
+proc simpleSolve(b:var Board): BoardState =
   var improvement:bool = true
   var solved:int = 0
-  while improvement or solved < 81:
+  while improvement and solved < 81:
     improvement = false
     solved = 0
     for i, c in b:
@@ -79,18 +93,57 @@ proc simpleSolve(b:var Board): bool =
       if len(c) > len(new_cell):
         improvement = true
       if len(new_cell) == 0:
-        raise newException(Exception, "all possibilities used")
+        return Failed
       b[i] = new_cell
-  return solved == 81
+  if solved == 81:
+    return Solved
+  else:
+    return Unsolved
+
+
+iterator pickGuess(b:Board): int =
+  for j in 2..9:
+    for i, c in b:
+      if len(c) == j:
+        yield i
+
 
 ## Default is for arguments to be immutable
-proc guessSolve(b:Board): bool =
-  return true
+## Should probably return the board and an indicator of the state
+## (solved, unsolved, failed) rather than just true or false
+proc guessSolve(b:Board): (BoardState, Board) =
+  var n: int = nSolved(b)
+  if n == 81:
+    return (Solved, b)
+  var state: BoardState
+  for i in pickGuess(b):
+    for j in b[i]:
+      var bb: Board
+      deepCopy(bb, b)
+      bb[i] = Cell(toSet([j]))
+      state = simpleSolve(bb)
+      if state == Solved:
+        return (state, bb)
+      elif state == Failed:
+        continue
+      else:
+        (state, bb) = guessSolve(bb)
+      if state == Solved:
+        return (state, bb)
+      else:
+        continue
+    return (Failed, b)
+
 
 proc main(): void =
-  var board = readBoard("1.txt")
-  printBoard(board)
-  var solved:bool = simpleSolve(board)
-  echo "Solved? ", $solved
-  printBoard(board)
+  for fname in commandLineParams():
+    var board = readBoard(fname)
+    echo fname
+    printBoard(board)
+    var state: BoardState = simpleSolve(board)
+    if state == Unsolved:
+      (state, board) = guessSolve(board)
+    echo "Current state: ", $state
+    printBoard(board)
+
 main()
