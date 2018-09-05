@@ -55,24 +55,40 @@ iterator getNeighbors(b:Board; i:int): Cell =
   let c:int = i %% 9
   let sr:int = i /% 27
   let sc:int = (i %% 9) /% 3
-  for j, elem in b:
+  for j in (r*9)..(r*9+8):
     if i == j:
       continue
-    if j /% 9 == r or j %% 9 == c or ((j%%9)/%3 == sc and j /% 27 == sr):
-      yield b[j]
+    yield b[j]
+  for j in 0..8:
+    if i == c + j * 9:
+      continue
+    yield b[c+j*9]
+  for j in 0..2:
+    for k in 0..2:
+      var idx = sr * 27 + j * 9 + k + sc * 3
+      if idx == i:
+        continue
+      yield b[idx]
+
 
 ## Modify this cell using simple elimination
 ## b is immutable at present -- probably more efficient to
 ## change that so the cell can be modified directly
-##
-## Looking for all cases in which the focal cell is the only
-## one in the row, etc. that can be a particular value might
-## make it faster.
 proc simpleElim(b:var Board; i:int): Cell =
   var c = b[i]
+  var k = 0
+  #var unfixed: Cell = initSet[int]()
   for n in getNeighbors(b, i):
+    k += 1
     if len(n) == 1:
       c = c - n
+    #unfixed = unfixed + n
+    if k %% 8 == 0:
+      #if len(c - unfixed) == 1:
+      #  c = c - unfixed
+      if len(c) == 1:
+        break
+      #unfixed.clear()
   return c
 
 
