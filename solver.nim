@@ -64,21 +64,20 @@ iterator getNeighbors(b:Board; i:int): Cell =
 ## Modify this cell using simple elimination
 ## b is immutable at present -- probably more efficient to
 ## change that so the cell can be modified directly
+##
+## Looking for all cases in which the focal cell is the only
+## one in the row, etc. that can be a particular value might
+## make it faster.
 proc simpleElim(b:var Board; i:int): Cell =
   var c = b[i]
   for n in getNeighbors(b, i):
     if len(n) == 1:
       c = c - n
-    if len(c) == 1:
-      break
   return c
 
 
 ## Run simpleElim on all cells, repeating until there is no more
 ## improvement; modifies b.
-##
-## Might be better not to throw an exception, but to
-## return a indicator of final board state.
 proc simpleSolve(b:var Board): BoardState =
   var improvement:bool = true
   var solved:int = 0
@@ -90,10 +89,10 @@ proc simpleSolve(b:var Board): BoardState =
         solved += 1
         continue
       var new_cell = simpleElim(b, i)
-      if len(c) > len(new_cell):
-        improvement = true
       if len(new_cell) == 0:
         return Failed
+      if len(c) > len(new_cell):
+        improvement = true
       b[i] = new_cell
   if solved == 81:
     return Solved
