@@ -137,16 +137,6 @@ proc guessSolve(b:Board): (BoardState, Board) =
     return (Failed, b)
 
 
-proc solve(fname:string): (string, Board, Board, BoardState) =
-  var start: Board = readBoard(fname)
-  var final: Board
-  deepCopy(final, start)
-  var state: BoardState = simpleSolve(final)
-  if state == Unsolved:
-    (state, final) = guessSolve(final)
-  return (fname, start, final, state)
-
-
 proc main(): void =
   for fname in commandLineParams():
     var board = readBoard(fname)
