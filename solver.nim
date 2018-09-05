@@ -77,18 +77,13 @@ iterator getNeighbors(b:Board; i:int): Cell =
 proc simpleElim(b:var Board; i:int): Cell =
   var c = b[i]
   var k = 0
-  #var unfixed: Cell = initSet[int]()
   for n in getNeighbors(b, i):
     k += 1
     if len(n) == 1:
       c = c - n
-    #unfixed = unfixed + n
     if k %% 8 == 0:
-      #if len(c - unfixed) == 1:
-      #  c = c - unfixed
       if len(c) == 1:
         break
-      #unfixed.clear()
   return c
 
 
