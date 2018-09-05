@@ -76,14 +76,9 @@ iterator getNeighbors(b:Board; i:int): Cell =
 ## change that so the cell can be modified directly
 proc simpleElim(b:var Board; i:int): Cell =
   var c = b[i]
-  var k = 0
   for n in getNeighbors(b, i):
-    k += 1
     if len(n) == 1:
       c = c - n
-    if k %% 8 == 0:
-      if len(c) == 1:
-        break
   return c
 
 
@@ -118,9 +113,6 @@ iterator pickGuess(b:Board): int =
         yield i
 
 
-## Default is for arguments to be immutable
-## Should probably return the board and an indicator of the state
-## (solved, unsolved, failed) rather than just true or false
 proc guessSolve(b:Board): (BoardState, Board) =
   var n: int = nSolved(b)
   if n == 81:
@@ -143,6 +135,16 @@ proc guessSolve(b:Board): (BoardState, Board) =
       else:
         continue
     return (Failed, b)
+
+
+proc solve(fname:string): (string, Board, Board, BoardState) =
+  var start: Board = readBoard(fname)
+  var final: Board
+  deepCopy(final, start)
+  var state: BoardState = simpleSolve(final)
+  if state == Unsolved:
+    (state, final) = guessSolve(final)
+  return (fname, start, final, state)
 
 
 proc main(): void =
